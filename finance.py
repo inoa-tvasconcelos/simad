@@ -62,7 +62,7 @@ if __name__ == "__main__":
     temp_date = pd.to_datetime('2023-09-01')
     beta = 0.8
     alfa = 1
-    periodo_volatilidade = 7
+    periodo_volatilidade = 64
     concurrent_simulations = 10000
     prices = get_prices(symbol, start_date, end_date)
     
