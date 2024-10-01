@@ -66,9 +66,6 @@ if __name__ == "__main__":
     concurrent_simulations = 10000
     prices = get_prices(symbol, start_date, end_date)
     
-    if temp_date not in prices.index:
-        temp_date = prices.index[prices.index.get_loc(temp_date, method='ffill')]
-    
     prices_temp = prices.loc[:temp_date]
     
     result = get_return_vol_historic_data(prices_temp, alfa, beta, periodo_volatilidade)
@@ -80,92 +77,111 @@ if __name__ == "__main__":
     simulations = simulate_monte_carlo(last_price, last_mu, last_sigma, temp_date, end_date, concurrent_simulations)
     
     simulated_dates = pd.date_range(start=temp_date, end=end_date, freq='B')
+    
     mean_simulated_prices = np.mean(simulations, axis=0)
 
-    assert simulations.shape[1] == len(simulated_dates), "Mismatch between simulation length and date range."
-    plt.figure(figsize=(12, 6))
+    if True:
+      plt.figure(figsize=(12, 6))
+      plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
+      plt.plot(prices.index, prices.values, label='Preços Reais', color='black', linewidth=2)
+      plt.plot(simulated_dates, mean_simulated_prices, label='Preço Médio Simulado', color='green', linewidth=2)
+      plt.title('Comparação entre Preços Reais e Preço Médio Simulado de Monte Carlo')
+      plt.xlabel('Data')
+      plt.ylabel(f'Preço de {symbol} (R$)')
+      plt.legend()
+      
     
-    plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
-    plt.plot(prices.index, prices.values, label='Preços Reais', color='black', linewidth=2)
-    plt.plot(simulated_dates, mean_simulated_prices, label='Preço Médio Simulado', color='green', linewidth=2)
-    plt.title('Comparação entre Preços Reais e Preço Médio Simulado de Monte Carlo')
-    plt.xlabel('Data')
-    plt.ylabel(f'Preço de {symbol} (R$)')
-    plt.legend()
-    
-    plt.show()
-    
-    plt.figure(figsize=(12, 6))
-    
-    plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
-    plt.title('Diferentes simulações de preço')
-    plt.xlabel('Data')
-    plt.ylabel(f'Preço de {symbol} (R$)')
-    plt.legend()
-    
-    plt.show()
+    if True:
+      plt.figure(figsize=(12, 6))
+      
+      plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
+      plt.title('Diferentes simulações de preço')
+      plt.xlabel('Data')
+      plt.ylabel(f'Preço de {symbol} (R$)')
+      plt.legend()
     
     final_prices = simulations[:, -1]
-    plt.figure(figsize=(10, 6))
-    plt.hist(final_prices, bins=50, color='blue')
-    plt.title('Distribuição dos Preços Finais após Simulações')
-    plt.xlabel('Preço Final')
-    plt.ylabel('Frequência')
-    plt.show()
+    if True:
+      plt.figure(figsize=(10, 6))
+      plt.hist(final_prices, bins=50, color='blue')
+      plt.title('Distribuição dos Preços Finais após Simulações')
+      plt.xlabel('Preço Final')
+      plt.ylabel('Frequência')
     
-    # Calcular média e desvio padrão dos preços finais
     mean_final_price = np.mean(final_prices)
     std_final_price = np.std(final_prices)
 
-    # Calcular intervalo de confiança de 95%
     confidence_interval_95 = np.percentile(final_prices, [2.5, 97.5])
 
-    # Exibir os resultados
     print(f"Média dos Preços Finais: {mean_final_price:.2f}")
     print(f"Desvio Padrão dos Preços Finais: {std_final_price:.2f}")
     print(f"Intervalo de Confiança de 95% dos Preços Finais: {confidence_interval_95[0]:.2f} - {confidence_interval_95[1]:.2f}")
     
-    # Calcular a CDF empírica dos preços simulados
     sorted_final_prices = np.sort(final_prices)
     cdf_empirical = np.arange(1, len(sorted_final_prices) + 1) / len(sorted_final_prices)
 
-    # Calcular a CDF teórica da distribuição log-normal
     mu = np.log(mean_final_price) - 0.5 * np.log(1 + (std_final_price / mean_final_price)**2)
     sigma = np.sqrt(np.log(1 + (std_final_price / mean_final_price)**2))
     cdf_theoretical = norm.cdf(np.log(sorted_final_prices), loc=mu, scale=sigma)
 
     # Plotar as CDFs empírica e teórica
-    plt.figure(figsize=(10, 6))
-    plt.plot(sorted_final_prices, cdf_empirical, label="CDF Empírica", color="blue")
-    plt.plot(sorted_final_prices, cdf_theoretical, label="CDF Teórica (Log-normal)", color="red", linestyle='--')
-    plt.title('Comparação entre a CDF Empírica e a CDF Teórica')
-    plt.xlabel('Preço Final')
-    plt.ylabel('CDF')
-    plt.legend()
-
-    # Mostrar o gráfico
-    plt.show()
+    if True:
+      plt.figure(figsize=(10, 6))
+      plt.plot(sorted_final_prices, cdf_empirical, label="CDF Empírica", color="blue")
+      plt.plot(sorted_final_prices, cdf_theoretical, label="CDF Teórica (Log-normal)", color="red", linestyle='--')
+      plt.title('Comparação entre a CDF Empírica e a CDF Teórica')
+      plt.xlabel('Preço Final')
+      plt.ylabel('CDF')
+      plt.legend()
     
-    # Garantindo que temos os mesmos períodos para a comparação
     valid_dates = simulated_dates.intersection(prices.index)
+    valid_indices = simulated_dates.get_indexer(valid_dates)
+    valid_simulations = simulations[:, valid_indices]
     real_prices = prices.loc[valid_dates]
-    predicted_prices = mean_simulated_prices[:len(valid_dates)]  # Ajustar as previsões para o tamanho das datas válidas
-
-    # Calcular Erro Médio Absoluto (MAE)
+    mean_simulated_prices = np.mean(valid_simulations, axis=0)
+    predicted_prices = mean_simulated_prices[:len(valid_dates)]  
+    
     mae = mean_absolute_error(real_prices, predicted_prices)
-
-    # Calcular Raiz do Erro Quadrático Médio (RMSE)
     rmse = np.sqrt(mean_squared_error(real_prices, predicted_prices))
 
-    # Calcular Coeficiente de Determinação (R²)
     r2 = r2_score(real_prices, predicted_prices)
 
-    # Exibir os resultados
     print(f"Erro Médio Absoluto (MAE): {mae:.2f}")
     print(f"Raiz do Erro Quadrático Médio (RMSE): {rmse:.2f}")
     print(f"Coeficiente de Determinação (R²): {r2:.2f}")
     
     real_final_price = prices.loc[simulated_dates[-1]] if simulated_dates[-1] in prices.index else prices.iloc[-1]
 
-    # Exibir a comparação entre o preço real final e o preço simulado final
     print(f"Preço Real Final em {simulated_dates[-1].date()}: {real_final_price:.2f}")
+    residuals = real_prices - predicted_prices
+    std_residuals = np.std(residuals)
+
+    residual_confidence_upper = predicted_prices + 1.96 * std_residuals
+    residual_confidence_lower = predicted_prices - 1.96 * std_residuals
+    if True:
+      plt.figure(figsize=(12, 6))
+      plt.plot(prices.index, prices.values, label='Real Prices', color='black', linewidth=2)
+      plt.plot(valid_dates, predicted_prices, label='Predicted Prices', color='green', linewidth=2)
+      plt.fill_between(valid_dates, residual_confidence_lower, residual_confidence_upper, color='green', alpha=0.3, label='95% Confidence Interval')
+      plt.title(f'Previsão de preço com 95% confiança')
+      plt.xlabel('Date')
+      plt.ylabel(f'Price of {symbol} (R$)')
+      plt.legend()
+    
+    within_confidence_interval = np.mean((real_prices >= residual_confidence_lower) & (real_prices <= residual_confidence_upper)) * 100
+    print(f"{within_confidence_interval:.2f}% of real prices are within the confidence interval")
+    print(f"interval of confidence {(2*1.96 * std_residuals)}")
+    
+    sim_confidence_lower = np.percentile(valid_simulations, 2.5, axis=0)
+    sim_confidence_upper = np.percentile(valid_simulations, 97.5, axis=0)
+    if True:
+      plt.figure(figsize=(12, 6))
+      plt.plot(prices.index, prices.values, label='Real Prices', color='black', linewidth=2)
+      plt.plot(valid_dates, mean_simulated_prices, label='Predicted Mean Prices', color='green', linewidth=2)
+      plt.fill_between(valid_dates, sim_confidence_lower, sim_confidence_upper, color='green', alpha=0.3, label='95% Confidence Interval')
+      plt.title(f'Previsão de preço com dinamica 95% CONFIANCA')
+      plt.xlabel('Date')
+      plt.ylabel(f'Price of {symbol} (R$)')
+      plt.legend()
+    
+    plt.show()
