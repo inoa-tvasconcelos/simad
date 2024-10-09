@@ -1,3 +1,4 @@
+import random
 import pandas as pd
 import yfinance as yf
 import numpy as np
@@ -55,14 +56,186 @@ def simulate_monte_carlo(preco_inicial, mu, sigma, start_date, end_date, N_simul
 
     return simulations
 
-if __name__ == "__main__":
-    symbol = 'PETR4.SA'
+def play(symbols, start_date, end_date, init_date):
+  prices = {}
+  for symbol in symbols:
+    try:
+      price = get_prices(symbol, start_date, end_date)
+      if not price.empty:
+        prices[symbol] = price
+    except:
+      pass
+  initial_qty = 500
+  symbols = list(prices.keys())
+  simulated_dates = pd.date_range(start=init_date, end=end_date, freq='B')
+  valid_dates = simulated_dates.intersection(prices[symbols[0]].index) 
+  carteira = {symbol: initial_qty for symbol in symbols}  
+  carteira_per_month = {}
+  total_per_month = []
+  stock_qty_per_month = {symbol: [carteira[symbol]] for symbol in symbols}  
+  total_qty_per_month = [sum(carteira.values())] 
+  
+  sell_limit = 20000
+  buy_limit = 10000
+  
+  valid_dates_per_month = valid_dates.to_series().groupby(valid_dates.month).first()
+  if init_date not in valid_dates_per_month.values:
+    valid_dates_per_month = valid_dates_per_month.append(pd.Series(init_date)).sort_values()
+  valid_dates_per_month = valid_dates_per_month[valid_dates_per_month >= init_date]
+  
+  for current_date in valid_dates_per_month:
+      if current_date <= init_date:
+        continue
+      retornos = []
+      for symbol in symbols:
+          ret = expected_return(current_date, prices[symbol], end_date)
+          retornos.append({'symbol': symbol, 'ret': ret})
+      carteira_desejada_alloc = carteira_desejada(retornos)
+      price_by_symbol = {symbol: prices[symbol].loc[current_date] for symbol in symbols}
+      carteira_diff = decisoes_do_dia(carteira, carteira_desejada_alloc, price_by_symbol, sell_limit, buy_limit)
+      for diff in carteira_diff.values():
+          symbol = diff['symbol']
+          carteira[symbol] += diff['ret']
+
+      for symbol in symbols:
+          stock_qty_per_month[symbol].append(carteira[symbol])
+      
+      total_qty = sum(carteira[symbol] for symbol in symbols)
+      total_qty_per_month.append(total_qty)
+      
+      carteira_per_month[current_date.month] = {symbol: carteira[symbol] for symbol in symbols}
+      total_value = sum([carteira[symbol] * price_by_symbol[symbol] for symbol in symbols])
+      total_per_month.append({'date': current_date, 'total_value': total_value})
+  
+  plot_stock_quantities(stock_qty_per_month, valid_dates_per_month, symbols)
+  plot_total_quantity(total_qty_per_month, valid_dates_per_month)
+  plot_total_carteira_value(total_per_month)
+  return carteira_per_month, total_per_month, stock_qty_per_month, total_qty_per_month
+
+def plot_stock_quantities(stock_qty_per_month, valid_dates_per_month, symbols):
+    plt.figure(figsize=(10, 6))
+    
+    for symbol in symbols:
+        plt.plot(valid_dates_per_month, stock_qty_per_month[symbol], label=f'{symbol} Qty')
+    
+    plt.title('Quantidade total por simbolo')
+    plt.xlabel('Data')
+    plt.ylabel('Qty')
+    plt.legend()
+
+def plot_total_quantity(total_qty_per_month, valid_dates_per_month):
+    plt.figure(figsize=(10, 6))
+    
+    plt.plot(valid_dates_per_month, total_qty_per_month, label='Total Stock Qty', color='blue')
+    
+    plt.title('Total Quantity Across All Symbols Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Total Stock Quantity')
+    plt.legend()
+
+def plot_total_carteira_value(total_per_month):
+    plt.figure(figsize=(10, 6))
+    
+    # Extract dates and total values from total_per_month
+    dates = [entry['date'] for entry in total_per_month]
+    total_values = [entry['total_value'] for entry in total_per_month]
+    
+    # Plot total carteira value over time
+    plt.plot(dates, total_values, label='Total Carteira Value', color='green', linewidth=2)
+    
+    plt.title('Total Portfolio Value Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Total Portfolio Value (R$)')
+    plt.legend()
+
+def carteira_desejada(retornos):
+    retornos_positivos = [data for data in retornos if data['ret'] > 0]
+    total_retorno = sum([data['ret'] for data in retornos_positivos])
+    if total_retorno == 0:
+        return {data['symbol']: 0 for data in retornos}
+    carteira_resultante = {
+        data['symbol']: data['ret'] / total_retorno if data['ret'] > 0 else 0 for data in retornos
+    }
+    
+    return carteira_resultante
+
+def decisoes_do_dia(carteira_atual, carteira_desejada, price_by_symbol, sell_limit, buy_limit):
+    carteira_diff = {}
+    total_sell = 0
+    total_shares = sum([v for v in carteira_atual.values()])
+    for simbolo, atual_value_in_shares in carteira_atual.items():
+        desired_value_in_shares = carteira_desejada[simbolo]*total_shares
+        price = price_by_symbol[simbolo]
+        diff_in_shares = desired_value_in_shares - atual_value_in_shares
+        if diff_in_shares < 0:
+            total_sell += abs(diff_in_shares) * price
+    
+    sell_multiplier = 1
+    if total_sell > sell_limit:
+        sell_multiplier = sell_limit / total_sell
+        total_sell = sell_limit
+    buy_limit += total_sell
+    
+    for simbolo, atual_value_in_shares in carteira_atual.items():
+        desired_value_in_shares = carteira_desejada[simbolo]*total_shares
+        price = price_by_symbol[simbolo]
+        diff_in_shares = desired_value_in_shares - atual_value_in_shares
+        if diff_in_shares < 0:
+            carteira_diff[simbolo] = {
+              'ret': round(diff_in_shares * sell_multiplier),
+              'symbol': simbolo
+            }
+    
+    total_buy = 0
+    for simbolo, atual_value_in_shares in carteira_atual.items():
+        desired_value_in_shares = carteira_desejada[simbolo] * (total_buy + buy_limit)
+        price = price_by_symbol[simbolo]
+        diff_in_shares = desired_value_in_shares - atual_value_in_shares
+        if diff_in_shares > 0:
+            total_buy += diff_in_shares * price
+    
+    buy_multiplier = 1
+    if total_buy > buy_limit:
+        buy_multiplier = buy_limit / total_buy
+        total_buy = buy_limit    
+    for simbolo, atual_value_in_shares in carteira_atual.items():
+        desired_value_in_shares = carteira_desejada[simbolo] * (total_buy + buy_limit)
+        diff_in_shares = desired_value_in_shares - atual_value_in_shares
+        if diff_in_shares > 0:
+          carteira_diff[simbolo] = {
+              'ret': round(diff_in_shares * buy_multiplier),
+              'symbol': simbolo
+          }
+    
+    return carteira_diff
+  
+def expected_return(temp_date, prices, end_date):
+  beta = 0.8
+  alfa = 0.95
+  periodo_volatilidade = 16
+  concurrent_simulations = 10000
+  prices_temp = prices.loc[:temp_date]
+  if len(prices_temp) < periodo_volatilidade:
+      return 0  
+  result = get_return_vol_historic_data(prices_temp, alfa, beta, periodo_volatilidade)
+  last_mu = result["ret"].iloc[-1]
+  last_sigma = result["vol"].iloc[-1]
+  last_price = prices_temp.iloc[-1]
+  if temp_date >= end_date:
+      return 0  
+  simulations = simulate_monte_carlo(last_price, last_mu, last_sigma, temp_date, end_date, concurrent_simulations)
+  final_prices = simulations[:, -1]
+  mean_final_price = np.mean(final_prices)
+  return (mean_final_price - last_price) / last_price
+  
+def show_example():
+    symbol = 'IRBR3.SA'
     start_date = pd.to_datetime('2023-01-01')
     end_date = pd.to_datetime('2023-12-31')
-    temp_date = pd.to_datetime('2023-09-01')
-    beta = 0.95
-    alfa = 1
-    periodo_volatilidade = 8
+    temp_date = pd.to_datetime('2023-09-21')
+    beta = 0.8
+    alfa = 0.95
+    periodo_volatilidade = 32
     concurrent_simulations = 10000
     prices = get_prices(symbol, start_date, end_date)
     
@@ -213,3 +386,18 @@ if __name__ == "__main__":
       plt.legend()
     
     plt.show()
+
+def get_random_symbols(file_path, qty):
+    data = pd.read_csv(file_path)
+    symbols = data['Ticker'].tolist()
+    return random.sample([f"{symbol}.SA" for symbol in symbols], qty)
+
+if __name__ == "__main__":
+  symbols = get_random_symbols("acoes-listadas-b3.csv", 5)
+  start_date = pd.to_datetime('2023-01-01')
+  end_date = pd.to_datetime('2023-12-31')
+  init_date = pd.to_datetime('2023-02-01')
+  play(symbols, start_date, end_date, init_date)
+  plt.show(block=True)
+  pass
+  
