@@ -102,11 +102,22 @@ if __name__ == "__main__":
     
     final_prices = simulations[:, -1]
     if True:
+      from scipy.stats import norm
       plt.figure(figsize=(10, 6))
-      plt.hist(final_prices, bins=50, color='blue')
-      plt.title('Distribuição dos Preços Finais após Simulações')
+      plt.hist(final_prices, bins=50, density=True, color='blue', alpha=0.6, label='Simulated Prices')
+
+      # Fit and plot the normal distribution
+      mean, std = np.mean(final_prices), np.std(final_prices)
+      xmin, xmax = plt.xlim()
+      x = np.linspace(xmin, xmax, 100)
+      p = norm.pdf(x, mean, std)
+      plt.plot(x, p, 'k', linewidth=2, label='Normal Distribution')
+
+      # Add titles and labels
+      plt.title('Distribuição dos Preços Finais após Simulações com Curva Normal')
       plt.xlabel('Preço Final')
-      plt.ylabel('Frequência')
+      plt.ylabel('Densidade de Probabilidade')
+      plt.legend()
     
     mean_final_price = np.mean(final_prices)
     std_final_price = np.std(final_prices)
