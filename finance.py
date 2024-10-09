@@ -60,9 +60,9 @@ if __name__ == "__main__":
     start_date = pd.to_datetime('2023-01-01')
     end_date = pd.to_datetime('2023-12-31')
     temp_date = pd.to_datetime('2023-09-01')
-    beta = 0.8
+    beta = 0.95
     alfa = 1
-    periodo_volatilidade = 64
+    periodo_volatilidade = 8
     concurrent_simulations = 10000
     prices = get_prices(symbol, start_date, end_date)
     
@@ -80,7 +80,8 @@ if __name__ == "__main__":
     
     mean_simulated_prices = np.mean(simulations, axis=0)
 
-    if True:
+    render_images = False
+    if render_images:
       plt.figure(figsize=(12, 6))
       plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
       plt.plot(prices.index, prices.values, label='Preços Reais', color='black', linewidth=2)
@@ -91,7 +92,7 @@ if __name__ == "__main__":
       plt.legend()
       
     
-    if True:
+    if render_images:
       plt.figure(figsize=(12, 6))
       
       plt.plot(simulated_dates, simulations.T, color='blue', alpha=0.1)
@@ -101,7 +102,7 @@ if __name__ == "__main__":
       plt.legend()
     
     final_prices = simulations[:, -1]
-    if True:
+    if render_images:
       from scipy.stats import norm
       plt.figure(figsize=(10, 6))
       plt.hist(final_prices, bins=50, density=True, color='blue', alpha=0.6, label='Simulated Prices')
@@ -122,11 +123,8 @@ if __name__ == "__main__":
     mean_final_price = np.mean(final_prices)
     std_final_price = np.std(final_prices)
 
-    confidence_interval_95 = np.percentile(final_prices, [2.5, 97.5])
-
     print(f"Média dos Preços Finais: {mean_final_price:.2f}")
     print(f"Desvio Padrão dos Preços Finais: {std_final_price:.2f}")
-    print(f"Intervalo de Confiança de 95% dos Preços Finais: {confidence_interval_95[0]:.2f} - {confidence_interval_95[1]:.2f}")
     
     sorted_final_prices = np.sort(final_prices)
     cdf_empirical = np.arange(1, len(sorted_final_prices) + 1) / len(sorted_final_prices)
@@ -136,7 +134,7 @@ if __name__ == "__main__":
     cdf_theoretical = norm.cdf(np.log(sorted_final_prices), loc=mu, scale=sigma)
 
     # Plotar as CDFs empírica e teórica
-    if True:
+    if render_images:
       plt.figure(figsize=(10, 6))
       plt.plot(sorted_final_prices, cdf_empirical, label="CDF Empírica", color="blue")
       plt.plot(sorted_final_prices, cdf_theoretical, label="CDF Teórica (Log-normal)", color="red", linestyle='--')
@@ -151,7 +149,9 @@ if __name__ == "__main__":
     real_prices = prices.loc[valid_dates]
     mean_simulated_prices = np.mean(valid_simulations, axis=0)
     predicted_prices = mean_simulated_prices[:len(valid_dates)]  
-    
+    absolute_differences = np.abs(mean_simulated_prices - real_prices)
+    mean_absolute_difference = np.mean(absolute_differences)
+    print(f"Média das Diferenças Absolutas: {mean_absolute_difference:.2f}")
     mae = mean_absolute_error(real_prices, predicted_prices)
     rmse = np.sqrt(mean_squared_error(real_prices, predicted_prices))
 
@@ -169,7 +169,11 @@ if __name__ == "__main__":
 
     residual_confidence_upper = predicted_prices + 1.96 * std_residuals
     residual_confidence_lower = predicted_prices - 1.96 * std_residuals
-    if True:
+    
+    print(f"95% Confidence Interval for the final price: {mean_final_price - 1.96 * std_residuals } - {mean_final_price + 1.96 * std_residuals}")
+
+    
+    if render_images:
       plt.figure(figsize=(12, 6))
       plt.plot(prices.index, prices.values, label='Real Prices', color='black', linewidth=2)
       plt.plot(valid_dates, predicted_prices, label='Predicted Prices', color='green', linewidth=2)
@@ -183,14 +187,27 @@ if __name__ == "__main__":
     print(f"{within_confidence_interval:.2f}% of real prices are within the confidence interval")
     print(f"interval of confidence {(2*1.96 * std_residuals)}")
     
-    sim_confidence_lower = np.percentile(valid_simulations, 2.5, axis=0)
-    sim_confidence_upper = np.percentile(valid_simulations, 97.5, axis=0)
+    from sklearn.linear_model import LinearRegression
+    
+    valid_dates_numeric = np.arange(len(valid_dates)).reshape(-1, 1)
+    initial_price = real_prices.iloc[0]
+    real_prices_adjusted = real_prices - initial_price
+    model = LinearRegression(fit_intercept=False)
+    model.fit(valid_dates_numeric, real_prices_adjusted)
+    regression_line = model.predict(valid_dates_numeric) + initial_price
+    
+    mean_simulated_prices = np.mean(valid_simulations, axis=0)
+    std_simulated_prices = np.std(valid_simulations, axis=0)
+    std_error_simulated_prices = std_simulated_prices / np.sqrt(concurrent_simulations)
+    upper_bound = mean_simulated_prices + std_error_simulated_prices
+    lower_bound = mean_simulated_prices - std_error_simulated_prices
+    
     if True:
       plt.figure(figsize=(12, 6))
       plt.plot(prices.index, prices.values, label='Real Prices', color='black', linewidth=2)
       plt.plot(valid_dates, mean_simulated_prices, label='Predicted Mean Prices', color='green', linewidth=2)
-      plt.fill_between(valid_dates, sim_confidence_lower, sim_confidence_upper, color='green', alpha=0.3, label='95% Confidence Interval')
-      plt.title(f'Previsão de preço com dinamica 95% CONFIANCA')
+      plt.plot(valid_dates, regression_line, label='Regressão Linear com os Preços Reais', color='red', linestyle='--', linewidth=2)
+      plt.title(f'Previsão de preço com dinâmica e Regressão Linear')
       plt.xlabel('Date')
       plt.ylabel(f'Price of {symbol} (R$)')
       plt.legend()
