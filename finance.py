@@ -78,67 +78,72 @@ def play(symbols, start_date, end_date, init_date):
 
   total_per_month = [{'date': init_date, 'total_value': total_value}]
   total_per_month_pato = [{'date': init_date, 'total_value': total_value_pato}]
-  stock_qty_per_month = {symbol: [carteira[symbol]] for symbol in symbols}  
-  stock_qty_per_month_pato = {symbol: [carteira_pato[symbol]] for symbol in symbols}  
+  stock_qty_per_month = {symbol: [{ "value": carteira[symbol], "date": init_date }] for symbol in symbols}  
+  stock_qty_per_month_pato = {symbol: [{ "value": carteira_pato[symbol], "date": init_date }] for symbol in symbols}  
   total_qty_per_month = [sum(carteira.values())] 
   total_qty_per_month_pato = [sum(carteira_pato.values())] 
   
   sell_limit = 20000
   buy_limit = 10000
   
-  valid_dates_per_month = valid_dates.to_series().groupby(valid_dates.month).first()
+  valid_dates_per_month = valid_dates.to_series().groupby(valid_dates.to_period("M")).first()
   if init_date not in valid_dates_per_month.values:
     valid_dates_per_month = valid_dates_per_month.append(pd.Series(init_date)).sort_values()
   valid_dates_per_month = valid_dates_per_month[valid_dates_per_month >= init_date]
   
   for current_date in valid_dates_per_month:
-      if current_date <= init_date:
-        continue
-      retornos = []
-      retornos_pato = []
-      for symbol in symbols:
-          ret = expected_return(current_date, prices[symbol], end_date)
-          retornos.append({'symbol': symbol, 'ret': ret})
-          ret_pato = random.choice([0, 1/len(symbols)])
-          retornos_pato.append({'symbol': symbol, 'ret': ret_pato})
-      carteira_desejada_alloc = carteira_desejada(retornos)
-      carteira_desejada_pato = carteira_desejada(retornos_pato)
-      price_by_symbol = {symbol: prices[symbol].loc[current_date] for symbol in symbols}
-      carteira_diff = decisoes_do_dia(carteira, carteira_desejada_alloc, price_by_symbol, sell_limit, buy_limit)
-      carteira_diff_pato = decisoes_do_dia(carteira_pato, carteira_desejada_pato, price_by_symbol, sell_limit, buy_limit)
-      for diff in carteira_diff.values():
-          symbol = diff['symbol']
-          carteira[symbol] += diff['ret']
-      for diff in carteira_diff_pato.values():
-          symbol = diff['symbol']
-          carteira_pato[symbol] += diff['ret']
-      for symbol in symbols:
-          stock_qty_per_month[symbol].append(carteira[symbol])
-          stock_qty_per_month_pato[symbol].append(carteira_pato[symbol])
-      
-      total_qty = sum(carteira[symbol] for symbol in symbols)
-      total_qty_pato = sum(carteira_pato[symbol] for symbol in symbols)
-      total_qty_per_month.append(total_qty)
-      total_qty_per_month_pato.append(total_qty_pato)
-      
-      carteira_per_month[current_date.month] = {symbol: carteira[symbol] for symbol in symbols}
-      carteira_pato_per_month[current_date.month] = {symbol: carteira_pato[symbol] for symbol in symbols}
-      total_value = sum([carteira[symbol] * price_by_symbol[symbol] for symbol in symbols])
-      total_value_pato = sum([carteira_pato[symbol] * price_by_symbol[symbol] for symbol in symbols])
-      total_per_month.append({'date': current_date, 'total_value': total_value})
-      total_per_month_pato.append({'date': current_date, 'total_value': total_value_pato})
+    if current_date <= init_date:
+      continue
+    retornos = []
+    retornos_pato = []
+    for symbol in symbols:
+      ret = expected_return(current_date, prices[symbol], end_date)
+      retornos.append({'symbol': symbol, 'ret': ret})
+      ret_pato = random.choice([0, 1/len(symbols)])
+      retornos_pato.append({'symbol': symbol, 'ret': ret_pato})
+    carteira_desejada_alloc = carteira_desejada(retornos)
+    carteira_desejada_pato = carteira_desejada(retornos_pato)
+    price_by_symbol = {symbol: prices[symbol].loc[current_date] for symbol in symbols}
+    carteira_diff = decisoes_do_dia(carteira, carteira_desejada_alloc, price_by_symbol, sell_limit, buy_limit)
+    carteira_diff_pato = decisoes_do_dia(carteira_pato, carteira_desejada_pato, price_by_symbol, sell_limit, buy_limit)
+    for diff in carteira_diff.values():
+      symbol = diff['symbol']
+      carteira[symbol] += diff['ret']
+    for diff in carteira_diff_pato.values():
+      symbol = diff['symbol']
+      carteira_pato[symbol] += diff['ret']
+    for symbol in symbols:
+      stock_qty_per_month[symbol].append({ "value": carteira[symbol], "date": current_date })
+      stock_qty_per_month_pato[symbol].append({ "value": carteira_pato[symbol], "date": current_date })
+    
+    total_qty = sum(carteira[symbol] for symbol in symbols)
+    total_qty_pato = sum(carteira_pato[symbol] for symbol in symbols)
+    total_qty_per_month.append(total_qty)
+    total_qty_per_month_pato.append(total_qty_pato)
+    
+    carteira_per_month[current_date.month] = {symbol: carteira[symbol] for symbol in symbols}
+    carteira_pato_per_month[current_date.month] = {symbol: carteira_pato[symbol] for symbol in symbols}
+    total_value = sum([carteira[symbol] * price_by_symbol[symbol] for symbol in symbols])
+    total_value_pato = sum([carteira_pato[symbol] * price_by_symbol[symbol] for symbol in symbols])
+    total_per_month.append({'date': current_date, 'total_value': total_value})
+    total_per_month_pato.append({'date': current_date, 'total_value': total_value_pato})
   
-  plot_stock_quantities(stock_qty_per_month, stock_qty_per_month_pato, valid_dates_per_month, symbols)
+  plot_stock_quantities(stock_qty_per_month, stock_qty_per_month_pato)
   plot_total_quantity(total_qty_per_month, total_qty_per_month_pato, valid_dates_per_month)
   plot_total_carteira_value(total_per_month, total_per_month_pato)
   return carteira_per_month, total_per_month, stock_qty_per_month, total_qty_per_month
 
-def plot_stock_quantities(stock_qty_per_month,stock_qty_per_month_pato, valid_dates_per_month, symbols):
+def plot_stock_quantities(stock_qty_per_month, stock_qty_per_month_pato):
     plt.figure(figsize=(10, 6))
     
-    for symbol in symbols:
-        plt.plot(valid_dates_per_month, stock_qty_per_month[symbol], label=f'Humano {symbol} Qty', color="blue")
-        plt.plot(valid_dates_per_month, stock_qty_per_month_pato[symbol], label=f'Peixe - {symbol} Qty', color="red")
+    for symbol, values in stock_qty_per_month.items():
+        dates = [entry['date'] for entry in values]
+        values = [entry['value'] for entry in values]
+        plt.plot(dates, values, label=f'Humano {symbol} Qty', color="blue")
+    for symbol, values in stock_qty_per_month_pato.items():
+        dates = [entry['date'] for entry in values]
+        values = [entry['value'] for entry in values]
+        plt.plot(dates, values, label=f'Humano {symbol} Qty', color="red")
     
     plt.title('Quantidade total por simbolo')
     plt.xlabel('Data')
@@ -422,9 +427,9 @@ def get_random_symbols(file_path, qty):
 
 if __name__ == "__main__":
   symbols = get_random_symbols("acoes-listadas-b3.csv", 5)
-  start_date = pd.to_datetime('2023-01-01')
+  start_date = pd.to_datetime('2021-10-01')
   end_date = pd.to_datetime('2023-12-31')
-  init_date = pd.to_datetime('2023-02-01')
+  init_date = pd.to_datetime('2021-11-01')
   play(symbols, start_date, end_date, init_date)
   plt.show(block=True)
   pass
