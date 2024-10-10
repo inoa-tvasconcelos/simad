@@ -56,15 +56,25 @@ def simulate_monte_carlo(preco_inicial, mu, sigma, start_date, end_date, N_simul
 
     return simulations
 
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
+
 def play(symbols, start_date, end_date, init_date):
   prices = {}
   for symbol in symbols:
     try:
       price = get_prices(symbol, start_date, end_date)
+      price.loc[init_date] # try to see if it has price in that date
       if not price.empty:
         prices[symbol] = price
     except:
-      pass
+      print(f"{symbol} não tem preço para o dia {str(init_date)}")
   initial_qty = 500
   symbols = list(prices.keys())
   simulated_dates = pd.date_range(start=init_date, end=end_date, freq='B')
@@ -91,9 +101,12 @@ def play(symbols, start_date, end_date, init_date):
     valid_dates_per_month = valid_dates_per_month.append(pd.Series(init_date)).sort_values()
   valid_dates_per_month = valid_dates_per_month[valid_dates_per_month >= init_date]
   
-  for current_date in valid_dates_per_month:
+  dates_size = len(valid_dates_per_month)
+  printProgressBar(0, dates_size, prefix = 'Progress:', suffix = 'Complete', length = 50)
+  for i, current_date in enumerate(valid_dates_per_month):
     if current_date <= init_date:
       continue
+    printProgressBar(i + 1, dates_size, prefix = 'Progress:', suffix = 'Complete', length = 50)
     retornos = []
     retornos_pato = []
     for symbol in symbols:
