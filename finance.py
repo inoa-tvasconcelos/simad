@@ -160,7 +160,7 @@ def plot_stock_quantities(stock_qty_per_month, stock_qty_per_month_pato):
     for symbol, values in stock_qty_per_month_pato.items():
         dates = [entry['date'] for entry in values]
         values = [entry['value'] for entry in values]
-        plt.plot(dates, values, label=f'Humano {symbol} Qty', color="red")
+        plt.plot(dates, values, label=f'Peixe {symbol} Qty', color="red")
     
     plt.title('Quantidade total por simbolo')
     plt.xlabel('Data')
