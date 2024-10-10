@@ -70,9 +70,11 @@ def play(symbols, start_date, end_date, init_date):
   for symbol in symbols:
     try:
       price = get_prices(symbol, start_date, end_date)
-      price.loc[init_date] # try to see if it has price in that date
       if not price.empty:
+        price.loc[init_date] # try to see if it has price in that date
         prices[symbol] = price
+      else:
+        print(f"Não foi possível obter preços do {symbol}")
     except:
       print(f"{symbol} não tem preço para o dia {str(init_date)}")
   initial_qty = 500
