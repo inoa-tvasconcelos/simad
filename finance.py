@@ -69,6 +69,7 @@ def play(symbols, start_date, end_date, init_date):
   prices = {}
   for symbol in symbols:
     try:
+      print(f"Pegando preço para {symbol}")
       price = get_prices(symbol, start_date, end_date)
       if not price.empty:
         price.loc[init_date] # try to see if it has price in that date
@@ -104,11 +105,12 @@ def play(symbols, start_date, end_date, init_date):
   valid_dates_per_month = valid_dates_per_month[valid_dates_per_month >= init_date]
   
   dates_size = len(valid_dates_per_month)
-  printProgressBar(0, dates_size, prefix = 'Progress:', suffix = 'Complete', length = 50)
+  
+  printProgressBar(0, dates_size, prefix = '\tSimulando:', suffix = 'Complete', length = 50)
   for i, current_date in enumerate(valid_dates_per_month):
     if current_date <= init_date:
       continue
-    printProgressBar(i + 1, dates_size, prefix = 'Progress:', suffix = 'Complete', length = 50)
+    printProgressBar(i + 1, dates_size, prefix = '\tSimulando:', suffix = 'Complete', length = 50)
     retornos = []
     retornos_pato = []
     for symbol in symbols:
